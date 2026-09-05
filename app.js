@@ -1,3 +1,5 @@
+import './engine.js';
+import { HabitatScene } from './scene.js';
 (() => {
   'use strict';
   const { Game, TYPES, PET_NAMES, ACTIVITIES } = globalThis.HamsterGame;
@@ -8,7 +10,7 @@
     ['energy', 'Энергия', 'ϟ', '#bfbd79'], ['happiness', 'Настроение', '♡', '#c69a84'],
     ['health', 'Здоровье', '✚', '#91a578'],
   ];
-  const nodes = new Map();
+  let scene;
   let toastTimer, last = null, uiTime = 0, helpWasPaused = false;
   const plural = n => n === 1 ? 'хомяк' : n < 5 ? 'хомяка' : 'хомяков';
   const needsCare = h => h.hunger < 30 || h.thirst < 30 || h.health < 40;
@@ -20,13 +22,7 @@
   $('stats').innerHTML = statDefinitions.map(([key, label, icon, color]) => `<div class="stat-row" id="stat-${key}"><div class="stat-header"><span><span class="stat-icon" style="color:${color}" aria-hidden="true">${icon}</span>${label}</span><span class="stat-value"></span></div><div class="stat-track" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100"><div class="stat-fill" style="--stat-color:${color}"></div></div></div>`).join('');
   function select(id) { game.selectedId = id; renderUI(); }
   function syncResidents() {
-    for (const [id, node] of nodes) if (!game.hamsters.some(h => h.id === id)) { node.remove(); nodes.delete(id); }
-    for (const h of game.hamsters) if (!nodes.has(h.id)) {
-      const button = document.createElement('button'); button.className = 'hamster'; button.type = 'button';
-      button.innerHTML = `<span class="selection-ring"></span><div class="sprite type-${h.type}"></div><span class="hamster-indicator"><i></i></span><span class="hamster-name">${h.name}</span><span class="bubble"></span>`;
-      button.addEventListener('click', () => select(h.id));
-      $('hamsters-layer').append(button); nodes.set(h.id, button);
-    }
+    scene?.sync();
     $('resident-list').replaceChildren(...game.hamsters.map(h => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'resident-card'; b.dataset.id = h.id;
       b.innerHTML = `<span class="sprite type-${h.type}" aria-hidden="true"></span><span class="resident-text"><strong>${h.name}</strong><small>${TYPES[h.type].name}</small></span><span class="resident-state"></span>`;
@@ -34,17 +30,7 @@
     }));
     renderPositions(); renderUI();
   }
-  function renderPositions() {
-    for (const h of game.hamsters) {
-      const node = nodes.get(h.id);
-      node.style.left = `${h.x}%`; node.style.top = `${h.y}%`;
-      node.style.zIndex = h.id === game.selectedId ? 30 : String(Math.floor(h.y / 5));
-      node.style.setProperty('--facing', h.facing);
-      node.className = `hamster ${h.activity} ${game.selectedId === h.id ? 'selected' : ''}`;
-      node.style.animationPlayState = game.paused ? 'paused' : '';
-      node.querySelector('.sprite').style.animationPlayState = game.paused ? 'paused' : '';
-    }
-  }
+  function renderPositions() { scene?.render(); }
   function renderUI() {
     const h = game.selected, n = game.hamsters.length, type = TYPES[h.type];
     $('habitat-summary').textContent = `${n} ${plural(n)} · ${game.hamsters.some(needsCare) ? 'ждут твоей заботы' : 'всем уютно'}`;
@@ -81,12 +67,7 @@
     $('speed-button').textContent = `${game.speed}×`;
     $('speed-button').setAttribute('aria-label', `Скорость игры ${game.speed}. Нажмите, чтобы изменить`);
     for (const pet of game.hamsters) {
-      const node = nodes.get(pet.id), card = $('resident-list').querySelector(`[data-id="${pet.id}"]`), need = needsCare(pet);
-      node.setAttribute('aria-label', `${pet.name}, ${TYPES[pet.type].name}, ${ACTIVITIES[pet.activity]}${need ? ', нужна забота' : ''}`);
-      node.setAttribute('aria-pressed', pet.id === h.id);
-      const fill = node.querySelector('.hamster-indicator i'); fill.style.width = `${Math.min(pet.hunger, pet.thirst, pet.health)}%`; fill.style.background = need ? '#cc755c' : '#77915e';
-      const bubble = node.querySelector('.bubble');
-      if (!bubble.classList.contains('heart')) bubble.textContent = pet.activity === 'sleep' ? 'zᶻ' : pet.activity === 'eat' ? '♪' : pet.activity === 'drink' ? '◕' : need ? '!' : '';
+      const card = $('resident-list').querySelector(`[data-id="${pet.id}"]`), need = needsCare(pet);
       card.classList.toggle('active', pet.id === h.id); card.classList.toggle('needs-care', need);
       card.setAttribute('aria-pressed', pet.id === h.id);
       card.querySelector('.resident-state').textContent = need ? 'Нужна забота' : pet.activity === 'sleep' ? 'Сладко спит' : 'Всё хорошо';
@@ -102,8 +83,6 @@
   $('pet-button').addEventListener('click', () => {
     const h = game.selected;
     if (game.pet(h.id)) {
-      const bubble = nodes.get(h.id).querySelector('.bubble'); bubble.textContent = '♥'; bubble.classList.add('heart');
-      setTimeout(() => { bubble.classList.remove('heart'); renderUI(); }, 1500);
       toast(`${h.name} радуется твоей заботе ♡`); renderUI();
     }
   });
@@ -120,5 +99,9 @@
     }
     last = now; requestAnimationFrame(frame);
   }
-  syncResidents(); requestAnimationFrame(frame);
+  scene = new HabitatScene($('habitat'), game, select);
+  $('reset-camera').addEventListener('click', () => scene.resetCamera());
+  $('zoom-in').addEventListener('click', () => scene.zoom(1 / 1.2));
+  $('zoom-out').addEventListener('click', () => scene.zoom(1.2));
+  syncResidents(); $('scene-loading').hidden = true; requestAnimationFrame(frame);
 })();

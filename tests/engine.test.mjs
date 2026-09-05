@@ -31,9 +31,9 @@ test('ten residents remain finite and inside the habitat with exhausted supplies
   advance(g, 2000);
   for (const h of g.hamsters) {
     for (const key of ['hunger', 'thirst', 'energy', 'happiness', 'health']) assert.ok(Number.isFinite(h[key]) && h[key] >= 0 && h[key] <= 100, key);
-    assert.ok(h.x > 10 && h.x < 95 && h.y > 20 && h.y < 90);
+    assert.ok(h.x >= 9 && h.x <= 91 && h.y >= 15 && h.y <= 85);
   }
-  g.feed(); g.fillWater(); advance(g, 100);
+  g.feed(); g.fillWater(); advance(g, 180);
   assert.ok(g.hamsters.every(h => h.hunger > 0 && h.thirst > 0));
 });
 test('new session resets all previous progress', () => {

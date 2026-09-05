@@ -1,3 +1,4 @@
+import { blocked, findPath } from './navigation.js';
 (function (root) {
   'use strict';
   const TYPES = [
@@ -7,7 +8,7 @@
   ];
   const NAMES = ['Персик', 'Пиксель', 'Снежок', 'Булочка', 'Тоша', 'Облачко', 'Карамель', 'Пончик', 'Пушок', 'Крошка'];
   const PET_NAMES = ['Персика', 'Пикселя', 'Снежка', 'Булочку', 'Тошу', 'Облачко', 'Карамель', 'Пончика', 'Пушка', 'Крошку'];
-  const STATIONS = { eat: { x: 27, y: 72 }, drink: { x: 72, y: 75 }, sleep: { x: 77, y: 37 }, wheel: { x: 21, y: 41 }, slide: { x: 81, y: 52 } };
+  const STATIONS = { eat: { x: 29, y: 70 }, drink: { x: 72, y: 73 }, sleep: { x: 74, y: 30 }, wheel: { x: 25, y: 40 }, slide: { x: 85, y: 70 } };
   const ACTIVITIES = { walk: 'Исследует вольер', eat: 'Хрустит зёрнышками', drink: 'Пьёт водичку', sleep: 'Сладко спит', wheel: 'Бежит в колесе', slide: 'Катается с горки', idle: 'Нюхает воздух' };
   const clamp = (n, a = 0, b = 100) => Math.min(b, Math.max(a, n));
   class Game {
@@ -24,7 +25,7 @@
       const h = { id, nameIndex, name: NAMES[nameIndex], type: id % 3, x: 35 + this.random() * 29, y: 48 + this.random() * 20,
         hunger: 70 + this.random() * 20, thirst: 65 + this.random() * 20, energy: 65 + this.random() * 20,
         happiness: 80 + this.random() * 15, health: 100, distance: 0, wheelTime: 0, meals: 0,
-        activity: 'idle', target: null, timer: 1 + this.random() * 4, petCooldown: 0, facing: 1 };
+        elevation: 0, heading: 0, route: [], slidePhase: 0, activity: 'idle', target: null, timer: 1 + this.random() * 4, petCooldown: 0, facing: 1 };
       this.hamsters.push(h); return h;
     }
     remove() {
@@ -37,7 +38,7 @@
     feed() { this.food = 100; this.invite('eat', 'hunger'); }
     fillWater() { this.water = 100; this.invite('drink', 'thirst'); }
     invite(activity, stat) {
-      for (const h of this.hamsters) if (h[stat] < 92 && h.activity !== 'sleep') this.go(h, activity);
+      for (const h of this.hamsters) if (h[stat] < 92 && !['sleep', 'slide'].includes(h.activity)) this.go(h, activity);
     }
     pet(id) {
       const h = this.hamsters.find(p => p.id === id);
@@ -45,11 +46,23 @@
       h.happiness = clamp(h.happiness + 14); h.petCooldown = 8; return true;
     }
     go(h, activity) {
-      const p = STATIONS[activity] || { x: 31 + this.random() * 38, y: 48 + this.random() * 30 };
-      // Spread visitors around shared stations so a full enclosure remains selectable.
-      const angle = h.id * 2.4, spread = activity === 'walk' ? 0 : 2.8;
-      h.target = { x: p.x + Math.cos(angle) * spread, y: p.y + Math.sin(angle) * spread, activity };
-      h.activity = 'walk';
+      if (['wheel', 'slide'].includes(activity) && this.hamsters.some(p => p.id !== h.id && (p.activity === activity || p.target?.activity === activity))) activity = 'walk';
+      let p;
+      if (activity === 'walk') {
+        for (let attempt = 0; attempt < 30; attempt++) {
+          p = { x: 13 + this.random() * 73, y: 18 + this.random() * 63 };
+          if (!blocked(p.x, p.y)) break;
+        }
+        if (blocked(p.x,p.y)) p = {x:50,y:52};
+      } else {
+        p = {...STATIONS[activity]};
+        const angle = h.nameIndex * Math.PI * 2 / 10;
+        const spread = activity === 'eat' ? 8 : activity === 'drink' ? 6.5 : activity === 'sleep' ? 3.2 : 0;
+        p.x += Math.cos(angle) * spread; p.y += Math.sin(angle) * spread;
+      }
+      const path = findPath(h,p);
+      if (!path.length) { h.activity='idle';h.target=null;h.route=[];h.timer=2;return; }
+      h.route = path; h.target = {...p, activity}; h.activity = 'walk';
     }
     decide(h) {
       if (h.thirst < 58 && this.water > 0) return this.go(h, 'drink');
@@ -76,20 +89,27 @@
         h.happiness = clamp(h.happiness - dt * (h.hunger < 25 || h.thirst < 25 ? 0.2 : 0.025));
         h.health = clamp(h.health + dt * (h.hunger < 15 || h.thirst < 15 ? -0.18 : h.hunger > 45 && h.thirst > 45 ? 0.25 : 0));
         if (h.target) {
-          const dx = h.target.x - h.x, dy = h.target.y - h.y, d = Math.hypot(dx, dy), travel = dt * 4.8;
-          if (d <= travel) {
-            h.x = h.target.x; h.y = h.target.y; h.activity = h.target.activity;
-            h.target = null; h.timer = h.activity === 'sleep' ? 40 : h.activity === 'wheel' ? 14 : h.activity === 'slide' ? 5 : 4;
-          } else { h.x += dx / d * travel; h.y += dy / d * travel; h.facing = dx >= 0 ? 1 : -1; }
-          h.distance += Math.min(d, travel) * 0.025;
+          const waypoint=h.route[0], dx=waypoint.x-h.x, dy=waypoint.y-h.y;
+          const d=Math.hypot(dx,dy), travel=dt*6;
+          h.heading=Math.atan2(dx,dy);
+          if(d<=travel) {
+            h.x=waypoint.x;h.y=waypoint.y;h.route.shift();
+            if(!h.route.length) {
+              h.activity=h.target.activity==='walk'?'idle':h.target.activity;
+              h.target=null;h.timer=h.activity==='wheel'?14:4;
+              if(h.activity==='slide') h.slidePhase=0;
+              if(h.activity==='eat'||h.activity==='drink') {const p=STATIONS[h.activity];h.heading=Math.atan2(p.x-h.x,p.y-h.y);}
+            }
+          } else {h.x+=dx/d*travel;h.y+=dy/d*travel;}
+          h.distance+=Math.min(d,travel)*0.025;
           continue;
         }
         h.timer -= dt;
         if (h.activity === 'eat') {
-          const portion = Math.min(this.food, dt * 0.6); this.food -= portion; h.hunger = clamp(h.hunger + portion * 7);
+          const portion = Math.min(this.food, dt * 0.22); this.food -= portion; h.hunger = clamp(h.hunger + portion * (4.2 / 0.22));
           if (h.hunger >= 97 || this.food <= 0.001) { h.meals++; this.go(h, 'walk'); }
         } else if (h.activity === 'drink') {
-          const sip = Math.min(this.water, dt * 0.6); this.water -= sip; h.thirst = clamp(h.thirst + sip * 8);
+          const sip = Math.min(this.water, dt * 0.22); this.water -= sip; h.thirst = clamp(h.thirst + sip * (4.8 / 0.22));
           if (h.thirst >= 97 || this.water <= 0.001) this.go(h, 'walk');
         } else if (h.activity === 'sleep') {
           h.energy = clamp(h.energy + dt * 1.9); h.happiness = clamp(h.happiness + dt * 0.08);
@@ -98,8 +118,12 @@
           h.wheelTime += dt; h.distance += dt * 0.08; h.happiness = clamp(h.happiness + dt * 0.45);
           if (h.timer <= 0 || h.energy < 25) this.decide(h);
         } else if (h.activity === 'slide') {
-          h.x -= dt * 1.25; h.y += dt * 2.8; h.happiness = clamp(h.happiness + dt * 0.8);
-          if (h.timer <= 0) this.decide(h);
+          const points=[{x:85,y:52,e:1.6},{x:80,y:52,e:1.6},{x:65,y:68,e:0}];
+          const goal=points[h.slidePhase], dx=goal.x-h.x,dy=goal.y-h.y,d=Math.hypot(dx,dy);
+          const speed=h.slidePhase===2?17:6, ratio=d<0.001?1:Math.min(1,dt*speed/d);
+          h.heading=Math.atan2(dx,dy);h.x+=dx*ratio;h.y+=dy*ratio;h.elevation+=(goal.e-h.elevation)*ratio;
+          h.happiness=clamp(h.happiness+dt*0.8);
+          if(ratio===1) {h.slidePhase++;if(h.slidePhase===3){h.elevation=0;this.go(h,'walk');}}
         } else if (h.timer <= 0) this.decide(h);
       }
     }
