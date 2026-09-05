@@ -1,4 +1,4 @@
-import {STATIONS,SLIDE,WHEEL,worldPosition,FLOOR_Y,stairElevation,sleepSpot} from '../layout.js';
+import {STATIONS,SLIDE,WHEEL,worldPosition,FLOOR_Y,stairElevation,sleepSpot,planPosition} from '../layout.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.module.min.js';
@@ -100,5 +100,36 @@ test('all ten feeding, drinking and sleeping spots are reachable',()=>{
   }
   for(let a=0;a<10;a++)for(let b=a+1;b<10;b++){
     const pa=sleepSpot(a),pb=sleepSpot(b);assert.ok(Math.hypot(pa.x-pb.x,pa.y-pb.y)*.16>.7);
+  }
+});
+
+
+test('diagonal slide deck blocks cross-traffic, including a stale route at 4x speed',()=>{
+  const a=planPosition(1,1.6),b=planPosition(6.5,1.6),mid=planPosition(3.6,1.6);
+  assert.ok(!blocked(a.x,a.y)&&!blocked(b.x,b.y));
+  assert.ok(blocked(mid.x,mid.y),'the inclined deck footprint must be solid');
+  assert.ok(!clearLine(a,b));
+  const g=new Game(()=>.5),h=g.selected;g.speed=4;
+  Object.assign(h,a,{activity:'walk',target:{...b,activity:'walk'},route:[b]});
+  for(let i=0;i<80;i++){g.tick(.1);if(h.activity!=='slide'&&h.activity!=='wheel')assert.ok(!blocked(h.x,h.y));}
+});
+
+test('manual care waits for a safe slide exit and reaches the requested station',()=>{
+  const g=new Game(()=>.5),h=g.selected;g.go(h,'slide');
+  for(let i=0;i<500&&h.activity!=='slide';i++)g.tick(.1);
+  assert.equal(h.activity,'slide');const before=[h.x,h.y,h.elevation];
+  assert.equal(g.request(h.id,'drink'),'queued');assert.deepEqual([h.x,h.y,h.elevation],before);
+  let arrived=false;
+  for(let i=0;i<800;i++){g.tick(.1);if(h.activity!=='slide'&&h.activity!=='wheel')assert.ok(!blocked(h.x,h.y));if(h.activity==='drink'){arrived=true;break;}}
+  assert.ok(arrived);assert.equal(h.requestedActivity,null);
+});
+
+test('full residents perform a complete bite, drink and sleep when requested',()=>{
+  for(const [activity,stat,minSeconds] of [['eat','hunger',3.8],['drink','thirst',2.8],['sleep','energy',7.8]]){
+    const g=new Game(()=>.5),h=g.selected;h[stat]=100;
+    assert.equal(g.request(h.id,activity),'started');
+    for(let i=0;i<600&&h.activity!==activity;i++)g.tick(.05);
+    assert.equal(h.activity,activity);
+    for(let i=0;i<minSeconds/.05;i++){g.tick(.05);assert.equal(h.activity,activity);}
   }
 });

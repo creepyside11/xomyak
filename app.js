@@ -1,5 +1,6 @@
 import './engine.js';
 import { HabitatScene } from './scene.js';
+import { actionDescription } from './animation.js';
 (() => {
   'use strict';
   const { Game, TYPES, PET_NAMES, ACTIVITIES } = globalThis.HamsterGame;
@@ -11,7 +12,7 @@ import { HabitatScene } from './scene.js';
     ['health', 'Здоровье', '✚', '#91a578'],
   ];
   let scene, sceneUnavailable = false;
-  const gameControlIds=['feed-button','water-button','pause-button','speed-button','add-hamster','remove-hamster','pet-button','reset-camera','zoom-in','zoom-out'];
+  const gameControlIds=['feed-button','water-button','pause-button','speed-button','add-hamster','remove-hamster','pet-button','reset-camera','zoom-in','zoom-out','follow-pet','toggle-roof','ask-eat','ask-drink','ask-sleep'];
   let toastTimer, last = null, uiTime = 0, helpWasPaused = false;
   const plural = n => n === 1 ? 'хомяк' : n < 5 ? 'хомяка' : 'хомяков';
   const needsCare = h => h.hunger < 30 || h.thirst < 30 || h.health < 40;
@@ -45,8 +46,18 @@ import { HabitatScene } from './scene.js';
     $('pet-species').textContent = `${type.name} · ${type.personality}`;
     $('pet-portrait').className = `pet-portrait sprite type-${h.type}`;
     $('pet-portrait').setAttribute('aria-label', `${type.name} хомяк ${h.name}`);
-    const destination = h.target && ({ eat: 'Идёт к миске', drink: 'Идёт к поилке', sleep: 'Идёт отдыхать', wheel: 'Идёт к колесу', slide: 'Идёт к горке' })[h.target.activity];
-    $('pet-activity').textContent = destination || ACTIVITIES[h.activity];
+    $('pet-activity').textContent = actionDescription(h);
+    $('action-pet-name').textContent=h.name;
+    $('pet-meals').textContent=h.meals;
+    $('action-queue').hidden=!h.requestedActivity;
+    $('action-queue').textContent=h.requestedActivity?`После выхода: ${{eat:'кормление',drink:'вода',sleep:'сон'}[h.requestedActivity]}`:'';
+    $('follow-pet').innerHTML=scene?.following?'◎ Вернуться к общему виду':'◎ Наблюдать вблизи';
+    $('follow-pet').setAttribute('aria-pressed',!!scene?.following);
+    $('view-status').textContent=scene?.following?`Наблюдаем: ${h.name}`:'Общий вид';
+    $('toggle-roof').setAttribute('aria-pressed',scene?.habitat.roof.visible===false);
+    $('toggle-roof').setAttribute('aria-label',scene?.habitat.roof.visible===false?'Показать крышу домика':'Скрыть крышу домика');
+    $('feed-button').style.setProperty('--supply',`${game.food}%`);
+    $('water-button').style.setProperty('--supply',`${game.water}%`);
     for (const [key] of statDefinitions) {
       const row = $(`stat-${key}`), value = Math.round(h[key]);
       row.classList.toggle('urgent', value < 30);
@@ -72,11 +83,17 @@ import { HabitatScene } from './scene.js';
       if(!card)continue;
       card.classList.toggle('active', pet.id === h.id); card.classList.toggle('needs-care', need);
       card.setAttribute('aria-pressed', pet.id === h.id);
-      card.querySelector('.resident-state').textContent = need ? 'Нужна забота' : pet.activity === 'sleep' ? 'Сладко спит' : 'Всё хорошо';
+      card.querySelector('.resident-state').textContent = need ? 'Нужна забота' : pet.target ? 'В пути' : ACTIVITIES[pet.activity];
     }
     if(sceneUnavailable)for(const id of gameControlIds)$(id).disabled=true;
     renderPositions();
   }
+  for(const [id,action] of [['ask-eat','eat'],['ask-drink','drink'],['ask-sleep','sleep']])$(id).addEventListener('click',()=>{
+    const h=game.selected,result=game.request(h.id,action);
+    const message=result==='queued'?'Сначала безопасно выйдет, затем выполнит команду':result==='empty'?'Сначала пополни общий запас под вольером':result==='unreachable'?'Сейчас к этому месту не пройти':`${h.name}: ${{eat:'идём за зёрнышками',drink:'идём пить',sleep:'пора отдохнуть'}[action]}`;
+    if(result==='started'&&scene)scene.follow(true);
+    renderUI();toast(message);
+  });
   $('feed-button').addEventListener('click', () => { game.feed(); renderUI(); toast('Миска полна! Малыши уже спешат на обед 🥕'); });
   $('water-button').addEventListener('click', () => { game.fillWater(); renderUI(); toast('Свежая водичка для всех 💧'); });
   $('pause-button').addEventListener('click', () => { game.paused = !game.paused; last = null; renderUI(); });
@@ -110,7 +127,9 @@ import { HabitatScene } from './scene.js';
     $('scene-error').textContent='В этом браузере недоступен WebGL 2. Включи аппаратное ускорение или открой игру в другом современном браузере.';
     renderUI();return;
   }
-  $('reset-camera').addEventListener('click', () => scene.resetCamera());
+  $('reset-camera').addEventListener('click', () => {scene.resetCamera();renderUI();});
+  $('follow-pet').addEventListener('click',()=>{scene.follow(!scene.following);renderUI();});
+  $('toggle-roof').addEventListener('click',()=>{scene.toggleRoof();renderUI();});
   $('zoom-in').addEventListener('click', () => scene.zoom(1 / 1.2));
   $('zoom-out').addEventListener('click', () => scene.zoom(1.2));
   syncResidents(); $('scene-loading').hidden = true; requestAnimationFrame(frame);

@@ -1,21 +1,23 @@
 // Ground navigation uses the same coordinates as the furniture in scene.js.
-import { OBSTACLES } from './layout.js';
+import { OBSTACLES, RAMP_OBSTACLE as ramp } from './layout.js';
 const BOUNDS = { minX: 9, maxX: 91, minY: 15, maxY: 85 };
+const rampLocal=p=>({x:(p.x-ramp.x)*ramp.dy-(p.y-ramp.y)*ramp.dx,y:(p.x-ramp.x)*ramp.dx+(p.y-ramp.y)*ramp.dy});
+function intersects(a,b,[x0,y0,x1,y1]) {
+  let low=0,high=1;
+  for(const [origin,delta,min,max] of [[a.x,b.x-a.x,x0,x1],[a.y,b.y-a.y,y0,y1]]) {
+    if(Math.abs(delta)<1e-10){if(origin<min||origin>max)return false;}
+    else {const t0=(min-origin)/delta,t1=(max-origin)/delta;low=Math.max(low,Math.min(t0,t1));high=Math.min(high,Math.max(t0,t1));}
+  }
+  return low<=high;
+}
 function blocked(x, y) {
-  return x < 9 || x > 91 || y < 15 || y > 85 || OBSTACLES.some(([a,b,c,d]) => x >= a && x <= c && y >= b && y <= d);
+  const p=rampLocal({x,y});
+  return x < 9 || x > 91 || y < 15 || y > 85 || (Math.abs(p.x)<=ramp.halfWidth&&Math.abs(p.y)<=ramp.halfLength) || OBSTACLES.some(([a,b,c,d]) => x >= a && x <= c && y >= b && y <= d);
 }
 function clearLine(a, b) {
   if (blocked(a.x,a.y) || blocked(b.x,b.y)) return false;
   // Exact segment/rectangle intersection: sampled rays can cut a thin corner.
-  for (const [x0,y0,x1,y1] of OBSTACLES) {
-    let low=0,high=1;
-    for (const [origin,delta,min,max] of [[a.x,b.x-a.x,x0,x1],[a.y,b.y-a.y,y0,y1]]) {
-      if(Math.abs(delta)<1e-10) {if(origin<min||origin>max){low=2;break;}}
-      else {const t0=(min-origin)/delta,t1=(max-origin)/delta;low=Math.max(low,Math.min(t0,t1));high=Math.min(high,Math.max(t0,t1));}
-    }
-    if(low<=high) return false;
-  }
-  return true;
+  return !OBSTACLES.some(box=>intersects(a,b,box)) && !intersects(rampLocal(a),rampLocal(b),[-ramp.halfWidth,-ramp.halfLength,ramp.halfWidth,ramp.halfLength]);
 }
 function findPath(start, goal) {
   if (blocked(goal.x,goal.y)) return [];

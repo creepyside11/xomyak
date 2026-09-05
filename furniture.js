@@ -66,23 +66,22 @@ export function createHabitat(){
   for(const x of [-SLIDE.width/2,SLIDE.width/2])box(ramp.group,birch,[x,.08,0],[.06,.18,ramp.length]);
   rod(group,[turn[0],FLOOR_Y,turn[2]],[turn[0],turn[1]-.10,turn[2]],.055,wood);
 
-  function bowl(point,r,material){
+  function bowl(point,r,material,height=.27){
     const g=new THREE.Group();g.position.set(...worldPosition(point.x,point.y));group.add(g);
-    const profile=[[0,0],[r*.8,0],[r,.035],[r,.22],[r*.94,.27],[r*.85,.25],[r*.77,.08],[0,.08]].map(p=>new THREE.Vector2(...p));
+    const profile=[[0,0],[r*.8,0],[r,.035],[r,.22],[r*.94,.27],[r*.85,.25],[r*.77,.08],[0,.08]].map(([x,y])=>new THREE.Vector2(x,y*height/.27));
     mesh(g,new THREE.LatheGeometry(profile,48),material,[0,0,0]);
     const contents=mesh(g,new THREE.CircleGeometry(r*.78,40),mat('#b79461'),[0,.17,0]);contents.rotation.x=-Math.PI/2;
     return {g,contents};
   }
-  const food=bowl(STATIONS.eat,.62,ceramic),water=bowl(STATIONS.drink,.47,mat('#909c9d',.28));
+  const food=bowl(STATIONS.eat,.62,ceramic),water=bowl(STATIONS.drink,.47,mat('#909c9d',.28),.105);
   water.contents.material=mat('#abc8ca',.13,{metalness:.18,transparent:true,opacity:.9});
   const seeds=new THREE.InstancedMesh(sphere,mat('#a2845d'),48);
   for(let i=0;i<48;i++){const a=random()*Math.PI*2,r=Math.sqrt(random())*.44;dummy.position.set(Math.cos(a)*r,.18+random()*.025,Math.sin(a)*r);dummy.rotation.set(random(),random()*3,random());dummy.scale.set(.039,.023,.065);dummy.updateMatrix();seeds.setMatrixAt(i,dummy.matrix);seeds.setColorAt(i,new THREE.Color().setScalar(.65+random()*.35));}food.g.add(seeds);
-  const bottleMaterial=new THREE.MeshPhysicalMaterial({color:'#dce6e4',transparent:true,opacity:.32,roughness:.12,depthWrite:false});
-  mesh(water.g,new THREE.CylinderGeometry(.2,.2,1.1,28),bottleMaterial,[.66,.86,-.08]);
-  const reserve=mesh(water.g,new THREE.CylinderGeometry(.17,.17,.86,28),mat('#abc8ca',.2,{transparent:true,opacity:.55}),[.66,.75,-.08]);
-  mesh(water.g,new THREE.CylinderGeometry(.215,.215,.09,28),metal,[.66,1.455,-.08]);
-  rod(water.g,[.66,.3,-.08],[.28,.2,.03],.033,metal);
-  rod(water.g,[.87,0,-.08],[.87,1.35,-.08],.045,metal);rod(water.g,[.87,1.2,-.08],[.66,1.2,-.08],.028,metal);
+  const ripples=[];
+  for(let i=0;i<3;i++){
+    const ring=mesh(water.g,new THREE.RingGeometry(.31,.322,48),new THREE.MeshBasicMaterial({color:'#f5ffff',transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}),[0,.174,0]);
+    ring.rotation.x=-Math.PI/2;ring.castShadow=false;ripples.push(ring);
+  }
   const tunnel=mesh(group,new THREE.CylinderGeometry(.55,.55,1.45,40,1,true),woodMaterial('#a38c68'),[-1,FLOOR_Y+.55,-3.8]);tunnel.material.side=THREE.DoubleSide;tunnel.rotation.z=Math.PI/2;
-  return {group,drum,roof,food:food.contents,seeds,water:water.contents,reserve};
+  return {group,drum,roof,food:food.contents,seeds,water:water.contents,ripples};
 }

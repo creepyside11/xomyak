@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f7f2">
+  <meta name="theme-color" content="#eeeee8">
   <meta name="description" content="Маленький мир хомяков: корми, заботься и наблюдай. Уютная игра без регистрации и сохранений.">
   <title>Хомяк 3D — маленький мир</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐹%3C/text%3E%3C/svg%3E">
@@ -11,38 +11,40 @@
 </head>
 <body>
   <header class="header">
-    <a class="brand" href="./" aria-label="Хомяк — начать заново"><span class="brand-icon">🐹</span><span>хомяк<span class="brand-dot">.</span><small>маленький мир, большая забота</small></span></a>
+    <a class="brand" href="./" aria-label="Хомяк — начать заново"><span class="brand-icon">🐹</span><span>хомяк<span class="brand-dot">.</span><small>живой маленький мир</small></span></a>
     <div class="header-actions"><span class="session-note">Без регистрации. Просто игра.</span><button class="icon-button" id="help-button" aria-label="Как играть">?</button></div>
   </header>
   <main>
-    <div class="heading"><div><div class="eyebrow">ТВОЙ МАЛЕНЬКИЙ МИР</div><h1>Дома хорошо<span>.</span></h1><p>Немного заботы. И много пушистого счастья.</p></div><div class="day-chip"><span aria-hidden="true">☀</span><div>Уютный день<small id="game-time">00:00 в игре</small></div></div></div>
+    <div class="heading"><div><div class="eyebrow">НАБЛЮДАЙ · ИГРАЙ · ЗАБОТЬСЯ</div><h1>Жизнь в маленьком мире<span>.</span></h1><p>Выбери хомяка и рассмотри его привычки поближе.</p></div><div class="day-chip"><span aria-hidden="true">☀</span><div>Сейчас в вольере<small id="game-time">00:00 в игре</small></div></div></div>
     <div class="game-layout">
       <section class="habitat-panel" aria-labelledby="habitat-title">
         <div class="panel-top"><div><h2 id="habitat-title">Мой вольер <span class="three-badge">3D</span></h2><span id="habitat-summary">3 хомяка · всем уютно</span></div><div class="playback"><button id="pause-button" class="icon-button" aria-label="Приостановить игру" aria-pressed="false">Ⅱ</button><button id="speed-button" class="speed-button" aria-label="Скорость игры">1×</button></div></div>
         <div class="habitat" id="habitat" role="group" aria-label="Вольер. Вращайте сцену и выбирайте хомяков, чтобы увидеть их потребности.">
           <div id="scene-loading" class="scene-message">Обустраиваем 3D-вольер…</div>
           <div id="scene-error" class="scene-message" role="alert" hidden></div>
-          <div class="camera-tools" role="group" aria-label="Управление камерой"><button id="reset-camera" aria-label="Общий вид" title="Общий вид">⌂</button><button id="zoom-in" aria-label="Приблизить">+</button><button id="zoom-out" aria-label="Отдалить">−</button></div>
+          <div class="view-badge" id="view-status">Общий вид</div><div class="camera-tools" role="group" aria-label="Управление камерой"><button id="reset-camera" aria-label="Общий вид" title="Общий вид">⌂</button><button id="zoom-in" aria-label="Приблизить">+</button><button id="zoom-out" aria-label="Отдалить">−</button><button id="toggle-roof" class="roof-control" aria-label="Скрыть крышу домика" aria-pressed="false">Крыша</button></div>
           <div class="paused-label" id="paused-label" hidden>На паузе <span>Никуда не торопимся</span></div>
-          <div class="scene-note">Перетаскивай — вращай · Колесо или два пальца — масштаб</div>
+          <div class="scene-note">Вращай одним пальцем · Приближай двумя</div>
         </div>
-        <div class="care-bar"><div class="care-intro"><span class="tiny-label">ВРЕМЯ ЗАБОТЫ</span><span>Для всех малышей</span></div><button class="care-button food-button" id="feed-button"><span class="care-icon" aria-hidden="true">🥕</span><span>Насыпать корм<small id="food-supply">В миске: 75%</small></span><span class="care-plus">+</span></button><button class="care-button water-button" id="water-button"><span class="care-icon" aria-hidden="true">💧</span><span>Налить воду<small id="water-supply">В поилке: 75%</small></span><span class="care-plus">+</span></button></div>
+        <div class="selected-actions" role="group" aria-label="Действия выбранного хомяка"><span><small>ПОЗАБОТИТЬСЯ</small><strong id="action-pet-name">Персик</strong></span><button id="ask-eat">Кормить</button><button id="ask-drink">Поить</button><button id="ask-sleep">Спать</button></div>
+        <div class="care-bar"><div class="care-intro"><span class="tiny-label">ОБЩИЕ ЗАПАСЫ</span><span>Пополнить для всех</span></div><button class="care-button food-button" id="feed-button"><span class="care-icon" aria-hidden="true">◒</span><span>Насыпать корм<small id="food-supply">В миске: 75%</small></span><span class="care-plus">+</span></button><button class="care-button water-button" id="water-button"><span class="care-icon" aria-hidden="true">◕</span><span>Налить воду<small id="water-supply">В поилке: 75%</small></span><span class="care-plus">+</span></button></div>
       </section>
       <aside class="details-panel" aria-labelledby="pet-name">
-        <div class="details-top"><span class="tiny-label">ЗНАКОМИМСЯ БЛИЖЕ</span><span class="pet-number" id="pet-number">01 / 03</span></div>
+        <div class="details-top"><span class="tiny-label">ВЫБРАННЫЙ ХОМЯК</span><span class="pet-number" id="pet-number">01 / 03</span></div>
         <div class="portrait-wrap"><div id="pet-portrait" class="pet-portrait sprite type-0" role="img" aria-label="Рыжий хомяк"></div><span class="species-dot" id="species-dot" aria-hidden="true">✦</span></div>
         <div class="pet-title"><h2 id="pet-name">Персик</h2><p id="pet-species">Сирийский · любопытный непоседа</p><span class="activity-pill" id="pet-activity">Исследует вольер</span></div>
+        <button class="observe-button" id="follow-pet" aria-pressed="false"><span aria-hidden="true">◎</span> Наблюдать вблизи</button><p class="action-queue" id="action-queue" aria-live="polite" hidden></p>
         <div class="stats" id="stats"></div>
-        <div class="pet-facts"><div><span>Пройдено</span><strong id="pet-distance">0 м</strong></div><div><span>В колесе</span><strong id="pet-wheel">0 сек</strong></div></div>
+        <div class="pet-facts"><div><span>Пройдено</span><strong id="pet-distance">0 м</strong></div><div><span>В колесе</span><strong id="pet-wheel">0 сек</strong></div><div><span>Приёмов пищи</span><strong id="pet-meals">0</strong></div></div>
         <button class="pet-button" id="pet-button"><span aria-hidden="true">♡</span> Погладить <span id="pet-button-name">Персика</span></button>
         <p class="pet-hint" id="pet-hint">Счастье складывается из мелочей</p>
       </aside>
     </div>
-    <section class="residents-panel" aria-labelledby="residents-title"><div class="residents-heading"><div><h2 id="residents-title">Пушистые жильцы <span id="resident-total">3</span></h2><p>У каждого — свой характер</p></div><div class="count-control"><label for="hamster-count">Хомяков</label><button id="remove-hamster" aria-label="Убрать одного хомяка">−</button><output id="hamster-count">3</output><button id="add-hamster" aria-label="Добавить одного хомяка">+</button><span>из 10</span></div></div><div class="resident-list" id="resident-list"></div></section>
-    <footer><span>Сделай паузу. Побудь с хомяками.</span><span>Новый визит — новая история <span aria-hidden="true">✦</span></span></footer>
+    <section class="residents-panel" aria-labelledby="residents-title"><div class="residents-heading"><div><h2 id="residents-title">Пушистые жильцы <span id="resident-total">3</span></h2><p>Выбирай в списке или прямо в вольере</p></div><div class="count-control"><label for="hamster-count">Хомяков</label><button id="remove-hamster" aria-label="Убрать одного хомяка">−</button><output id="hamster-count">3</output><button id="add-hamster" aria-label="Добавить одного хомяка">+</button><span>из 10</span></div></div><div class="resident-list" id="resident-list"></div></section>
+    <footer><span>хомяк. / версия 2.2</span><span>Новый визит — новая история <span aria-hidden="true">✦</span></span></footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <dialog id="help-dialog"><button class="dialog-close icon-button" id="close-help" aria-label="Закрыть">×</button><div class="help-emoji">🐹</div><h2>Маленькая инструкция</h2><p>Выбери хомяка в вольере или в списке, чтобы увидеть его сытость, запас воды, энергию, настроение и здоровье.</p><ul><li>Вращай вольер мышью или одним пальцем. Приближай колесом мыши или жестом двух пальцев. Кнопка ⌂ возвращает общий вид. Когда сцена в фокусе, работают стрелки, +, − и Home.</li><li>Насыпай корм и наливай воду. Проголодавшиеся хомяки сами подходят к миске и поилке.</li><li>Малыши гуляют, бегают в колесе, катаются с горки и отдыхают в домике.</li><li>Поглаживания поднимают настроение. Пауза останавливает время, а кнопка скорости ускоряет его.</li><li>Кнопками − и + можно оставить от 1 до 10 хомяков. Новый малыш получает один из трёх видов по очереди.</li></ul><p class="help-note">Игра ничего не сохраняет: при обновлении страницы всё начинается заново. Это условный игровой мир, а не руководство по содержанию животных.</p><button class="primary-button" id="start-playing">Всё понятно, к хомякам</button></dialog>
+  <dialog id="help-dialog"><button class="dialog-close icon-button" id="close-help" aria-label="Закрыть">×</button><div class="help-emoji">🐹</div><h2>Маленькая инструкция</h2><p>Выбери хомяка в вольере или в списке, чтобы увидеть его сытость, запас воды, энергию, настроение и здоровье.</p><ul><li>Вращай вольер мышью или одним пальцем. Приближай колесом мыши или жестом двух пальцев. Кнопка ⌂ возвращает общий вид. Когда сцена в фокусе, работают стрелки, +, − и Home.</li><li>«Кормить», «Поить» и «Спать» отправляют выбранного хомяка к нужному месту. Если он на горке или в колесе, команда дождётся безопасного выхода.</li><li>Кнопка «Наблюдать вблизи» следует за хомяком. Так видно, как он берёт корм лапками, пьёт и дышит во сне. Крыша домика снимается отдельной кнопкой, а при наблюдении за сном скрывается сама.</li><li>Пополняй общие запасы под вольером. Хомяки также едят, пьют и отдыхают самостоятельно.</li><li>Малыши гуляют, бегают в колесе, катаются с горки и отдыхают в домике.</li><li>Поглаживания поднимают настроение. Пауза останавливает время, а кнопка скорости ускоряет его.</li><li>Кнопками − и + можно оставить от 1 до 10 хомяков. Новый малыш получает один из трёх видов по очереди.</li></ul><p class="help-note">Игра ничего не сохраняет: при обновлении страницы всё начинается заново. Это условный игровой мир, а не руководство по содержанию животных.</p><button class="primary-button" id="start-playing">Всё понятно, к хомякам</button></dialog>
   <noscript>Для игры включите JavaScript в браузере.</noscript>
   <script src="bootstrap.js"></script>
 </body>

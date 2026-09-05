@@ -1,5 +1,5 @@
 import { STATIONS, SLIDE, WHEEL, stairElevation, sleepSpot, groundElevation } from './layout.js';
-import { blocked, findPath } from './navigation.js';
+import { blocked, clearLine, findPath } from './navigation.js';
 (function (root) {
   'use strict';
   const TYPES = [
@@ -26,7 +26,9 @@ import { blocked, findPath } from './navigation.js';
       const h = { id, nameIndex, name: NAMES[nameIndex], type: id % 3, x: 35 + this.random() * 29, y: 48 + this.random() * 20,
         hunger: 70 + this.random() * 20, thirst: 65 + this.random() * 20, energy: 65 + this.random() * 20,
         happiness: 80 + this.random() * 15, health: 100, distance: 0, wheelTime: 0, meals: 0,
-        elevation: 0, pitch: 0, heading: 0, wheelPhase: 'enter', route: [], slidePhase: 0, activity: 'idle', target: null, timer: 1 + this.random() * 4, petCooldown: 0, facing: 1 };
+        elevation: 0, pitch: 0, heading: 0, wheelPhase: 'enter', route: [], slidePhase: 0, activity: 'idle', activityTime:0, stride:0, requestedActivity:null, target: null, timer: 1 + this.random() * 4, petCooldown: 0, facing: 1 };
+      for(let attempt=0;blocked(h.x,h.y)&&attempt<30;attempt++){h.x=35+this.random()*29;h.y=48+this.random()*20;}
+      if(blocked(h.x,h.y)){h.x=50;h.y=52;}
       this.hamsters.push(h); return h;
     }
     remove() {
@@ -46,6 +48,14 @@ import { blocked, findPath } from './navigation.js';
       if (!h || h.petCooldown > 0) return false;
       h.happiness = clamp(h.happiness + 14); h.petCooldown = 8; return true;
     }
+    request(id,activity) {
+      const h=this.hamsters.find(p=>p.id===id);
+      if(!h||!['eat','drink','sleep'].includes(activity))return 'invalid';
+      if(activity==='eat'&&this.food<.1)return 'empty';
+      if(activity==='drink'&&this.water<.1)return 'empty';
+      if(['wheel','slide'].includes(h.activity)){h.requestedActivity=activity;return 'queued';}
+      h.requestedActivity=null;this.go(h,activity);return h.target?'started':'unreachable';
+    }
     go(h, activity) {
       if (['wheel', 'slide'].includes(activity) && this.hamsters.some(p => p.id !== h.id && (p.activity === activity || p.target?.activity === activity))) activity = 'walk';
       let p;
@@ -58,14 +68,15 @@ import { blocked, findPath } from './navigation.js';
       } else {
         p = activity==='sleep' ? sleepSpot(h.nameIndex) : {...STATIONS[activity]};
         const angle = h.nameIndex * Math.PI * 2 / 10;
-        const spread = activity === 'eat' ? 8 : activity === 'drink' ? 6.5 : 0;
+        const spread = activity === 'eat' ? 6.5 : activity === 'drink' ? 6.5 : 0;
         p.x += Math.cos(angle) * spread; p.y += Math.sin(angle) * spread;
       }
       const path = findPath(h,p);
       if (!path.length) { h.activity='idle';h.target=null;h.route=[];h.timer=2;return; }
-      h.route = path; h.target = {...p, activity}; h.activity = 'walk';h.elevation=0;h.pitch=0;
+      h.route = path; h.target = {...p, activity}; h.activity = 'walk';h.activityTime=0;h.elevation=groundElevation(h.x,h.y);h.pitch=0;
     }
     decide(h) {
+      if(h.requestedActivity){const activity=h.requestedActivity;h.requestedActivity=null;return this.go(h,activity);}
       if (h.thirst < 58 && this.water > 0) return this.go(h, 'drink');
       if (h.hunger < 60 && this.food > 0) return this.go(h, 'eat');
       if (h.energy < 30) return this.go(h, 'sleep');
@@ -83,6 +94,7 @@ import { blocked, findPath } from './navigation.js';
     step(dt) {
       this.elapsed += dt;
       for (const h of this.hamsters) {
+        h.activityTime+=dt;
         h.petCooldown = Math.max(0, h.petCooldown - dt);
         h.hunger = clamp(h.hunger - dt * 0.09);
         h.thirst = clamp(h.thirst - dt * 0.12);
@@ -92,12 +104,15 @@ import { blocked, findPath } from './navigation.js';
         if (h.target) {
           const waypoint=h.route[0], dx=waypoint.x-h.x, dy=waypoint.y-h.y;
           const d=Math.hypot(dx,dy), travel=dt*6;
+          const next={x:h.x+dx*(d<.001?1:Math.min(1,travel/d)),y:h.y+dy*(d<.001?1:Math.min(1,travel/d))};
+          // Check the swept segment too: a stale route must never tunnel through furniture.
+          if(!clearLine(h,next)){const action=h.target.activity;this.go(h,action);continue;}
           h.heading=Math.atan2(dx,dy);
           if(d<=travel) {
             h.x=waypoint.x;h.y=waypoint.y;h.route.shift();
             if(!h.route.length) {
               h.activity=h.target.activity==='walk'?'idle':h.target.activity;
-              h.target=null;h.timer=h.activity==='wheel'?14:4;
+              h.target=null;h.activityTime=0;h.timer=h.activity==='wheel'?14:4;
               if(h.activity==='slide') h.slidePhase=0;
               if(h.activity==='wheel'){h.wheelPhase='enter';h.timer=14;}
               if(h.activity==='sleep'){h.elevation=sleepSpot(h.nameIndex).e;h.heading=0;}
@@ -105,39 +120,43 @@ import { blocked, findPath } from './navigation.js';
             }
           } else {h.x+=dx/d*travel;h.y+=dy/d*travel;}
           h.distance+=Math.min(d,travel)*0.025;
+          h.stride+=Math.min(d,travel)*.16;
           if(h.activity!=='slide'&&h.activity!=='wheel')h.elevation=groundElevation(h.x,h.y);
           continue;
         }
         h.timer -= dt;
         if (h.activity === 'eat') {
           const portion = Math.min(this.food, dt * 0.22); this.food -= portion; h.hunger = clamp(h.hunger + portion * (4.2 / 0.22));
-          if (h.hunger >= 97 || this.food <= 0.001) { h.meals++; this.go(h, 'walk'); }
+          if ((h.hunger >= 97 && h.activityTime>=4) || this.food <= 0.001) { h.meals++; this.decide(h); }
         } else if (h.activity === 'drink') {
           const sip = Math.min(this.water, dt * 0.22); this.water -= sip; h.thirst = clamp(h.thirst + sip * (4.8 / 0.22));
-          if (h.thirst >= 97 || this.water <= 0.001) this.go(h, 'walk');
+          if ((h.thirst >= 97 && h.activityTime>=3) || this.water <= 0.001) this.decide(h);
         } else if (h.activity === 'sleep') {
           h.energy = clamp(h.energy + dt * 1.9); h.happiness = clamp(h.happiness + dt * 0.08);
-          if (h.energy >= 96) this.go(h, 'walk');
+          if (h.energy >= 96 && h.activityTime>=8) this.decide(h);
         } else if (h.activity === 'wheel') {
           if(h.wheelPhase==='run') {
             h.wheelTime+=dt;h.distance+=dt*.08;h.happiness=clamp(h.happiness+dt*.45);
+            h.stride+=dt*1.6;
             h.heading=Math.PI/2;
             if(h.timer<=0||h.energy<25)h.wheelPhase='exit';
           } else {
             const goal=h.wheelPhase==='enter'?WHEEL.run:WHEEL.entry;
             const dx=goal.x-h.x,dy=goal.y-h.y,d=Math.hypot(dx,dy),ratio=d<.001?1:Math.min(1,dt*6/d);
             h.heading=Math.atan2(dx,dy);h.x+=dx*ratio;h.y+=dy*ratio;h.elevation+=(goal.e-h.elevation)*ratio;
+            h.stride+=d*ratio*.16;
             if(ratio===1){if(h.wheelPhase==='enter'){h.wheelPhase='run';h.timer=14;}else {h.elevation=0;this.decide(h);}}
           }
         } else if (h.activity === 'slide') {
-          const points=[SLIDE.top,SLIDE.turn,SLIDE.end];
+          const points=[SLIDE.top,SLIDE.turn,SLIDE.end,SLIDE.exit];
           const goal=points[h.slidePhase], dx=goal.x-h.x,dy=goal.y-h.y,d=Math.hypot(dx,dy);
           const speed=h.slidePhase===2?17:6, ratio=d<0.001?1:Math.min(1,dt*speed/d);
           h.heading=Math.atan2(dx,dy);h.x+=dx*ratio;h.y+=dy*ratio;h.elevation+=(goal.e-h.elevation)*ratio;
+          h.stride+=d*ratio*.16;
           if(h.slidePhase===0)h.elevation=stairElevation(h.y);
           h.pitch=h.slidePhase===2?Math.atan2(SLIDE.turn.e,Math.hypot(SLIDE.end.x-SLIDE.turn.x,SLIDE.end.y-SLIDE.turn.y)*.16):0;
           h.happiness=clamp(h.happiness+dt*0.8);
-          if(ratio===1) {h.slidePhase++;if(h.slidePhase===3){h.elevation=0;this.go(h,'walk');}}
+          if(ratio===1) {h.slidePhase++;if(h.slidePhase===4){h.elevation=0;h.pitch=0;this.decide(h);}}
         } else if (h.timer <= 0) this.decide(h);
       }
     }

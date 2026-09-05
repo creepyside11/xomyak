@@ -1,7 +1,8 @@
 import * as THREE from './vendor/three.module.min.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
 
-import { worldPosition, WHEEL, UNIT, FLOOR_Y, stairElevation } from './layout.js';
+import { worldPosition, waterSurface } from './layout.js';
+import { animateHamster } from './animation.js';
 import { mesh, sphere, cube, mat } from './geometry.js';
 import { createHabitat } from './furniture.js';
 import { createHamster } from './hamster.js';
@@ -30,6 +31,7 @@ export class HabitatScene {
     this.controls.enablePan=false;this.controls.minPolarAngle=.15;this.controls.maxPolarAngle=Math.PI*.475;
     this.controls.minDistance=6;this.controls.maxDistance=36;this.controls.rotateSpeed=.65;
     this.controls.zoomSpeed=.75;this.controls.target.set(0,.3,0);
+    this.controls.addEventListener('start',()=>{this.manualOrbit=true;this.followOffset=null;});
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
     let down=null,maxTravel=0,multiTouch=false;const activePointers=new Set();
     canvas.addEventListener('pointerdown',e=>{activePointers.add(e.pointerId);if(activePointers.size>1)multiTouch=true;down={x:e.clientX,y:e.clientY};maxTravel=0;});
@@ -55,10 +57,20 @@ export class HabitatScene {
   showError(message) {const e=document.getElementById('scene-error');e.textContent=message;e.hidden=false;}
   resize() {const w=this.container.clientWidth,h=this.container.clientHeight;if(!w||!h)return;this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h,false);}
   resetCamera() {
+    this.following=false;this.controls.minDistance=3;
     const ratio=this.container.clientWidth/Math.max(1,this.container.clientHeight),distance=ratio<1?26:23;
     this.controls.target.set(0,.3,0);this.camera.position.set(distance*.56,distance*.66,distance*.64);this.controls.update();
   }
-  zoom(factor) {const offset=this.camera.position.clone().sub(this.controls.target);offset.setLength(THREE.MathUtils.clamp(offset.length()*factor,6,36));this.camera.position.copy(this.controls.target).add(offset);this.controls.update();}
+  zoom(factor) {const offset=this.camera.position.clone().sub(this.controls.target);offset.setLength(THREE.MathUtils.clamp(offset.length()*factor,3,36));this.camera.position.copy(this.controls.target).add(offset);this.controls.update();}
+  follow(enabled=true) {
+    this.following=enabled;this.manualOrbit=false;this.followAction=null;
+    if(!enabled){this.resetCamera();return;}
+    const h=this.game.selected,target=world(h.x,h.y,h.elevation+.35);
+    this.followOffset=this.actionView(h);this.controls.target.copy(target);this.camera.position.copy(target).add(this.followOffset);
+    this.controls.update();
+  }
+  actionView(h){if(h.activity==='sleep')return new THREE.Vector3(.6,3.6,1.1);const a=h.heading;return new THREE.Vector3(Math.sin(a)*2.3+Math.cos(a)*2.1,2.0,Math.cos(a)*2.3-Math.sin(a)*2.1);}
+  toggleRoof(){this.roofHidden=this.habitat.roof.visible;this.roofOverride=true;}
   pick(x,y) {
     const rect=this.renderer.domElement.getBoundingClientRect();this.pointer.set((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1);
     this.raycaster.setFromCamera(this.pointer,this.camera);
@@ -83,35 +95,35 @@ export class HabitatScene {
     const t=this.game.elapsed,dt=t-this.lastTime;this.lastTime=t;
     const running=this.game.hamsters.some(h=>h.activity==='wheel'&&h.wheelPhase==='run');if(running)this.habitat.drum.rotation.z-=dt*3;
     this.habitat.food.visible=this.game.food>.5;this.habitat.seeds.count=Math.round(this.game.food/100*48);this.habitat.water.visible=this.game.water>.5;
-    this.habitat.water.position.y=.10+.07*this.game.water/100;
-    this.habitat.reserve.scale.y=Math.max(.01,this.game.water/100);this.habitat.reserve.position.y=.32+.43*this.game.water/100;
+    this.habitat.water.position.y=waterSurface(this.game.water);
+    const drinking=this.game.hamsters.some(h=>h.activity==='drink');
+    this.habitat.ripples.forEach((r,i)=>{
+      const phase=(t*1.5+i/3)%1;r.visible=drinking&&this.game.water>.5;
+      r.position.y=this.habitat.water.position.y+.004;r.scale.setScalar(.3+phase*.7);r.material.opacity=(1-phase)*.33;
+    });
+    const selected=this.game.selected;
+    this.habitat.roof.visible=this.roofOverride?!this.roofHidden:!(this.following&&selected.activity==='sleep');
+    if(this.following){
+      const target=world(selected.x,selected.y,selected.elevation+.35);
+      const shift=target.sub(this.controls.target).multiplyScalar(.14);
+      this.controls.target.add(shift);this.camera.position.add(shift);
+      const action=`${selected.id}:${selected.activity}`;
+      if(action!==this.followAction){
+        if(!this.manualOrbit&&['eat','drink','sleep'].includes(selected.activity))this.followOffset=this.actionView(selected);
+        this.followAction=action;
+      }
+      if(this.followOffset){
+        const goal=this.controls.target.clone().add(this.followOffset);this.camera.position.lerp(goal,.10);
+        if(this.camera.position.distanceTo(goal)<.005)this.followOffset=null;
+      }
+    }
     this.controls.update();this.camera.updateMatrixWorld(true);
     for(const h of this.game.hamsters){
-      const p=this.pets.get(h.id),moving=!!h.target||h.activity==='wheel'||h.activity==='slide';
-      p.group.position.copy(world(h.x,h.y,h.elevation));
-      const heading=h.heading;
-      p.group.rotation.y+=Math.atan2(Math.sin(heading-p.group.rotation.y),Math.cos(heading-p.group.rotation.y))*.16;
-      const gait=t*(h.activity==='wheel'?21:13)+h.id;
-      p.bodyRoot.position.y=moving?Math.abs(Math.sin(gait))*.008:Math.sin(t*2+h.id)*.003;
-      p.bodyRoot.rotation.x=h.pitch||0;
-      p.bodyRoot.rotation.z=moving?Math.sin(gait)*.013:0;
-      p.bodyRoot.scale.y=h.activity==='sleep'?.76:1;
-      p.head.rotation.x=h.activity==='eat'?Math.sin(t*11)*.055:h.activity==='drink'?.25:h.activity==='sleep'?.22:0;
-      p.feet.forEach((f,i)=>{
-        f.rotation.x=moving?Math.sin(gait+(i===0||i===3?0:Math.PI))*.22:0;
-        f.position.y=.037;
-        const local=new THREE.Vector3(f.position.x,0,f.position.z).applyAxisAngle(new THREE.Vector3(0,1,0),p.group.rotation.y);
-        if(h.activity==='slide'&&h.slidePhase===0)f.position.y+=stairElevation((p.group.position.z+local.z)/UNIT+50)-h.elevation;
-        if(h.activity==='wheel'&&h.wheelPhase==='run'){
-          const dx=p.group.position.x+local.x-WHEEL.x;
-          const height=WHEEL.centerY-Math.sqrt(Math.max(.01,(WHEEL.radius-.02)**2-dx**2));
-          f.position.y+=height-FLOOR_Y-h.elevation;
-        }
-      });
-      p.ring.visible=h.id===this.game.selectedId;
+      const p=this.pets.get(h.id);
+      animateHamster(p,h,this.game,dt);
       const v=p.group.position.clone().add(new THREE.Vector3(0,.98,0)).project(this.camera);
       const visible=v.z>-1&&v.z<1&&Math.abs(v.x)<1.05&&Math.abs(v.y)<1.05;
-      p.label.hidden=!visible;p.label.style.left=`${(v.x*.5+.5)*100}%`;p.label.style.top=`${(-v.y*.5+.5)*100}%`;
+      p.label.hidden=!visible||(this.following&&h.id!==this.game.selectedId);p.label.style.left=`${(v.x*.5+.5)*100}%`;p.label.style.top=`${(-v.y*.5+.5)*100}%`;
       p.label.classList.toggle('selected',h.id===this.game.selectedId);p.label.setAttribute('aria-pressed',h.id===this.game.selectedId);
       p.label.querySelector('span').textContent=h.name+(h.activity==='sleep'?' ᶻᶻ':'');
       const value=Math.min(h.hunger,h.thirst,h.health);const bar=p.label.querySelector('b');bar.style.width=`${value}%`;bar.style.background=value<30?'#c57656':'#809659';
