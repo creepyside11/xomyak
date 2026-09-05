@@ -1,0 +1,13 @@
+{
+  "name": "xomyak",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Уютный браузерный симулятор хомяков без регистрации и сохранений",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check app.js && node --check engine.js"
+  },
+  "engines": { "node": ">=20" }
+}
