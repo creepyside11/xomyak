@@ -1,12 +1,5 @@
 // Ground navigation uses the same coordinates as the furniture in scene.js.
-const OBSTACLES = [
-  [38, 22, 49, 30], // timber tunnel
-  [15, 23, 34, 37], // wheel back and support
-  [63, 19, 85, 22], [63, 19, 66, 38], [82, 19, 85, 38], // house walls, open doorway
-  [75, 46, 90, 64], // elevated slide platform; approached from the stairs
-  [24, 65, 34, 75], // food bowl
-  [68, 69, 76, 77], // water bowl
-];
+import { OBSTACLES } from './layout.js';
 const BOUNDS = { minX: 9, maxX: 91, minY: 15, maxY: 85 };
 function blocked(x, y) {
   return x < 9 || x > 91 || y < 15 || y > 85 || OBSTACLES.some(([a,b,c,d]) => x >= a && x <= c && y >= b && y <= d);

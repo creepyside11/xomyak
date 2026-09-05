@@ -10,7 +10,8 @@ import { HabitatScene } from './scene.js';
     ['energy', 'Энергия', 'ϟ', '#bfbd79'], ['happiness', 'Настроение', '♡', '#c69a84'],
     ['health', 'Здоровье', '✚', '#91a578'],
   ];
-  let scene;
+  let scene, sceneUnavailable = false;
+  const gameControlIds=['feed-button','water-button','pause-button','speed-button','add-hamster','remove-hamster','pet-button','reset-camera','zoom-in','zoom-out'];
   let toastTimer, last = null, uiTime = 0, helpWasPaused = false;
   const plural = n => n === 1 ? 'хомяк' : n < 5 ? 'хомяка' : 'хомяков';
   const needsCare = h => h.hunger < 30 || h.thirst < 30 || h.health < 40;
@@ -68,10 +69,12 @@ import { HabitatScene } from './scene.js';
     $('speed-button').setAttribute('aria-label', `Скорость игры ${game.speed}. Нажмите, чтобы изменить`);
     for (const pet of game.hamsters) {
       const card = $('resident-list').querySelector(`[data-id="${pet.id}"]`), need = needsCare(pet);
+      if(!card)continue;
       card.classList.toggle('active', pet.id === h.id); card.classList.toggle('needs-care', need);
       card.setAttribute('aria-pressed', pet.id === h.id);
       card.querySelector('.resident-state').textContent = need ? 'Нужна забота' : pet.activity === 'sleep' ? 'Сладко спит' : 'Всё хорошо';
     }
+    if(sceneUnavailable)for(const id of gameControlIds)$(id).disabled=true;
     renderPositions();
   }
   $('feed-button').addEventListener('click', () => { game.feed(); renderUI(); toast('Миска полна! Малыши уже спешат на обед 🥕'); });
@@ -99,7 +102,14 @@ import { HabitatScene } from './scene.js';
     }
     last = now; requestAnimationFrame(frame);
   }
-  scene = new HabitatScene($('habitat'), game, select);
+  syncResidents();
+  try { scene = new HabitatScene($('habitat'), game, select); }
+  catch(error) {
+    console.error('3D renderer unavailable:',error);sceneUnavailable=true;game.paused=true;
+    $('scene-loading').hidden=true;$('scene-error').hidden=false;
+    $('scene-error').textContent='В этом браузере недоступен WebGL 2. Включи аппаратное ускорение или открой игру в другом современном браузере.';
+    renderUI();return;
+  }
   $('reset-camera').addEventListener('click', () => scene.resetCamera());
   $('zoom-in').addEventListener('click', () => scene.zoom(1 / 1.2));
   $('zoom-out').addEventListener('click', () => scene.zoom(1.2));

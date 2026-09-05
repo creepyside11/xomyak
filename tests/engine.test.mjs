@@ -27,7 +27,7 @@ test('tired residents rest and petting improves mood with a cooldown', () => {
   advance(g, 65); assert.ok(h.energy > 75); assert.equal(g.pet(h.id), true);
 });
 test('ten residents remain finite and inside the habitat with exhausted supplies', () => {
-  const g = new Game(); for (let i = 0; i < 7; i++) g.add(); g.food = 0; g.water = 0;
+  let seed=17;const g = new Game(()=>{seed=seed*16807%2147483647;return seed/2147483647;}); for (let i = 0; i < 7; i++) g.add(); g.food = 0; g.water = 0;
   advance(g, 2000);
   for (const h of g.hamsters) {
     for (const key of ['hunger', 'thirst', 'energy', 'happiness', 'health']) assert.ok(Number.isFinite(h[key]) && h[key] >= 0 && h[key] <= 100, key);
